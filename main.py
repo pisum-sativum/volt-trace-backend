@@ -15,9 +15,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure GOOGLE_API_KEY is set in your environment variables before running
-# export GOOGLE_API_KEY="your_api_key"
-
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
 ENERGY_PER_GB = 0.81  
@@ -25,32 +22,26 @@ CARBON_PER_KWH = 475
 
 @app.get("/api/scan")
 def scan_website(url: str, carbon_intensity: float = 475.0):
-    # Ensure it's a full URL
     if not url.startswith("http"):
         url = "https://" + url
         
-    # Our new, stronger browser disguise
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
     }
         
     try:
-        # Using 'requests' instead of 'aiohttp'. It handles redirects automatically.
         response = requests.get(url, headers=headers, timeout=10)
         
-        # Check if we got blocked
         if response.status_code != 200:
             raise Exception(f"Website blocked the scan (Status Code: {response.status_code}).")
         
         html = response.text
         
-        # 1. Math Phase
         size_bytes = len(html.encode('utf-8'))
         size_gb = size_bytes / (1024 * 1024 * 1024)
         carbon_grams = size_gb * ENERGY_PER_GB * carbon_intensity
         
-        # 2. Parsing Phase
         soup = BeautifulSoup(html, 'lxml')
         images = len(soup.find_all('img'))
         scripts = len(soup.find_all('script'))
@@ -58,7 +49,6 @@ def scan_website(url: str, carbon_intensity: float = 475.0):
         size_kb = round(size_bytes / 1024, 2)
         carbon_final = round(carbon_grams, 6)
 
-     # 3. Agentic Reasoning Phase 
         prompt = f"""
                 You are a senior Green IT Consultant auditing the website {url}.
                 
@@ -90,12 +80,10 @@ def scan_website(url: str, carbon_intensity: float = 475.0):
         try:
             ai_data = json.loads(ai_text)
         except Exception:
-            # Fallback if the AI messes up the JSON
             ai_data = [{"problem": "Audit Analysis Output", "solution": ai_text}]
         
-        # 4. Return Payload
         return {
-            "target_url": response.url, # This will show the final URL even if redirected
+            "target_url": response.url,
             "page_size_kb": size_kb,
             "carbon_emissions_grams": carbon_final,
             "assets_found": {
